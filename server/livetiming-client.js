@@ -63,10 +63,7 @@ async function _connect(eventId) {
   sockets.set(eventId, ws);
 
   ws.on("open", () => {
-    console.log(`[ws:${eventId}] connected — sending subscription`);
-    // Try common subscription message formats used by timing systems
-    try { ws.send(JSON.stringify({ EXPORTID: String(eventId) })); } catch {}
-    try { ws.send(String(eventId)); } catch {}
+    console.log(`[ws:${eventId}] connected — waiting for data`);
   });
 
   ws.on("message", (raw) => {
@@ -82,8 +79,9 @@ async function _connect(eventId) {
     }
   });
 
-  ws.on("close", (code) => {
-    console.log(`[ws:${eventId}] closed (${code}), reconnecting in ${RECONNECT_MS}ms`);
+  ws.on("close", (code, reason) => {
+    const msg = reason?.toString() || "";
+    console.log(`[ws:${eventId}] closed (${code}${msg ? " " + msg : ""}), reconnecting in ${RECONNECT_MS}ms`);
     sockets.delete(eventId);
     setTimeout(() => _connect(eventId), RECONNECT_MS);
   });
