@@ -16,13 +16,21 @@ app.get("/health", (_req, res) => res.json({ ok: true, uptime: process.uptime() 
 
 // Debug: shows raw WebSocket data (remove after fixing normalizer)
 app.get("/api/debug/:id", (req, res) => {
-  const cached = getCached(req.params.id);
-  if (!cached) return res.status(404).json({ error: "no data yet" });
+  const eventId = req.params.id;
+  ensureConnected(eventId);
+  const cached = getCached(eventId);
+  if (!cached) {
+    return res.status(202).json({ status: "connecting", message: "WebSocket connecting, wait 3s and refresh" });
+  }
   const { RESULT, ...rest } = cached.data;
   const sample = Array.isArray(RESULT)
-    ? RESULT.filter(Boolean).slice(0, 2)
+    ? RESULT.filter(Boolean).slice(0, 3)
     : RESULT;
-  res.json({ meta: rest, RESULT_sample: sample, RESULT_length: Array.isArray(RESULT) ? RESULT.length : typeof RESULT });
+  res.json({
+    meta: rest,
+    RESULT_length: Array.isArray(RESULT) ? RESULT.length : typeof RESULT,
+    RESULT_sample: sample,
+  });
 });
 
 app.get("/api/event/:id", (req, res) => {
