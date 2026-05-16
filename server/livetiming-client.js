@@ -33,12 +33,14 @@ async function fetchCookies(eventId) {
       redirect: "follow",
     });
     const raw = res.headers.get("set-cookie") ?? "";
-    // Extract individual cookie name=value pairs
-    const cookies = [...raw.matchAll(/([^,;\s]+=[^,;]+)/g)]
-      .map((m) => m[1].trim())
-      .filter((c) => !/(path|domain|expires|samesite|secure|httponly)/i.test(c));
-    console.log(`[ws:${eventId}] cookies obtained:`, cookies.join("; ").slice(0, 120));
-    return cookies.join("; ");
+    // Keep only name=value pairs, skip attributes like Max-Age, Path, Domain, etc.
+    const SKIP = /^(max-age|path|domain|expires|samesite|secure|httponly)/i;
+    const cookies = raw.split(/[,;]/)
+      .map((s) => s.trim())
+      .filter((s) => s.includes("=") && !SKIP.test(s));
+    const cookieStr = cookies.join("; ");
+    console.log(`[ws:${eventId}] cookies:`, cookieStr.slice(0, 120));
+    return cookieStr;
   } catch (e) {
     console.warn(`[ws:${eventId}] cookie fetch failed:`, e.message);
     return "";
@@ -61,7 +63,10 @@ async function _connect(eventId) {
   sockets.set(eventId, ws);
 
   ws.on("open", () => {
-    console.log(`[ws:${eventId}] connected`);
+    console.log(`[ws:${eventId}] connected — sending subscription`);
+    // Try common subscription message formats used by timing systems
+    try { ws.send(JSON.stringify({ EXPORTID: String(eventId) })); } catch {}
+    try { ws.send(String(eventId)); } catch {}
   });
 
   ws.on("message", (raw) => {

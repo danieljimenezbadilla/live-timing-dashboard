@@ -20,7 +20,7 @@ app.get("/api/debug/:id", (req, res) => {
   ensureConnected(eventId);
   const cached = getCached(eventId);
   if (!cached) {
-    return res.status(202).json({ status: "connecting", message: "WebSocket connecting, wait 3s and refresh" });
+    return res.status(202).json({ status: "connecting", message: "WebSocket connecting — wait 10s and refresh this URL" });
   }
   const { RESULT, ...rest } = cached.data;
   const sample = Array.isArray(RESULT)
