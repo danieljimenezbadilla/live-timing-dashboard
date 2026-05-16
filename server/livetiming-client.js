@@ -1,8 +1,5 @@
-// Uses a headless browser (Puppeteer) to open the live timing page exactly
-// as a real user would. Intercepts WebSocket frames via Chrome DevTools
-// Protocol and caches the latest data for the HTTP API to serve.
-
-import puppeteer from "puppeteer";
+import chromium from "@sparticuz/chromium";
+import puppeteer from "puppeteer-core";
 
 const BASE_URL = "https://livetiming.azurewebsites.net";
 
@@ -23,16 +20,10 @@ async function _connect(eventId) {
 
   try {
     const browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--no-first-run",
-        "--no-zygote",
-        "--disable-extensions",
-      ],
+      args: chromium.args,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+      defaultViewport: chromium.defaultViewport,
     });
 
     const page = await browser.newPage();
@@ -53,7 +44,7 @@ async function _connect(eventId) {
         }
         cache.set(eventId, { data: msg, ts: Date.now() });
       } catch {
-        // ignore non-JSON frames (ping/pong, binary)
+        // ignore non-JSON frames
       }
     });
 

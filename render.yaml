@@ -2,10 +2,8 @@ services:
   - type: web
     name: live-timing-dashboard
     runtime: node
-    buildCommand: npm install --prefix server && npm install --prefix client && npm run build --prefix client
+    buildCommand: npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PUPPETEER_CACHE_DIR
-        value: /opt/render/project/src/.puppeteer-cache
