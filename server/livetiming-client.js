@@ -1,92 +1,80 @@
-// Connects to wss://livetiming.azurewebsites.net/ and caches live data.
-//
-// The upstream requires Azure session cookies (TiPMix / x-ms-routing-name)
-// that are set by the initial HTTP page load. We fetch the page first to
-// obtain those cookies, then open the WebSocket with them.
+// Uses a headless browser (Puppeteer) to open the live timing page exactly
+// as a real user would. Intercepts WebSocket frames via Chrome DevTools
+// Protocol and caches the latest data for the HTTP API to serve.
 
-import { WebSocket } from "ws";
+import puppeteer from "puppeteer";
 
-const BASE = "https://livetiming.azurewebsites.net";
-const WS_URL = "wss://livetiming.azurewebsites.net/";
-const RECONNECT_MS = 5000;
+const BASE_URL = "https://livetiming.azurewebsites.net";
 
-// eventId -> { data: Object, ts: number }
-const cache = new Map();
-// eventId -> WebSocket | "connecting"
-const sockets = new Map();
+const cache = new Map();    // eventId -> { data, ts }
+const sessions = new Map(); // eventId -> browser | "connecting"
 
 export function ensureConnected(eventId) {
-  if (!sockets.has(eventId)) _connect(eventId);
+  if (!sessions.has(eventId)) _connect(eventId);
 }
 
 export function getCached(eventId) {
   return cache.get(eventId) ?? null;
 }
 
-async function fetchCookies(eventId) {
-  try {
-    const res = await fetch(`${BASE}/event=${eventId}?config=w3`, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,*/*",
-      },
-      redirect: "follow",
-    });
-    const raw = res.headers.get("set-cookie") ?? "";
-    // Keep only name=value pairs, skip attributes like Max-Age, Path, Domain, etc.
-    const SKIP = /^(max-age|path|domain|expires|samesite|secure|httponly)/i;
-    const cookies = raw.split(/[,;]/)
-      .map((s) => s.trim())
-      .filter((s) => s.includes("=") && !SKIP.test(s));
-    const cookieStr = cookies.join("; ");
-    console.log(`[ws:${eventId}] cookies:`, cookieStr.slice(0, 120));
-    return cookieStr;
-  } catch (e) {
-    console.warn(`[ws:${eventId}] cookie fetch failed:`, e.message);
-    return "";
-  }
-}
-
 async function _connect(eventId) {
-  sockets.set(eventId, "connecting");
+  sessions.set(eventId, "connecting");
+  console.log(`[pup:${eventId}] launching browser…`);
 
-  const cookie = await fetchCookies(eventId);
+  try {
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--no-first-run",
+        "--no-zygote",
+        "--disable-extensions",
+      ],
+    });
 
-  const ws = new WebSocket(WS_URL, {
-    headers: {
-      "Origin": BASE,
-      "Cookie": cookie,
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
-    },
-  });
+    const page = await browser.newPage();
+    const cdp = await page.createCDPSession();
+    await cdp.send("Network.enable");
 
-  sockets.set(eventId, ws);
+    cdp.on("Network.webSocketFrameReceived", ({ response }) => {
+      const payload = response?.payloadData;
+      if (!payload) return;
+      try {
+        const msg = JSON.parse(payload);
+        if (!msg.EXPORTID) return;
 
-  ws.on("open", () => {
-    console.log(`[ws:${eventId}] connected — waiting for data`);
-  });
-
-  ws.on("message", (raw) => {
-    try {
-      const msg = JSON.parse(raw.toString());
-      if (!cache.has(eventId)) {
-        const result = Array.isArray(msg.RESULT) ? msg.RESULT.filter(Boolean) : [];
-        console.log(`[ws:${eventId}] first message — RESULT entries: ${result.length}, sample:`, JSON.stringify(result[0]).slice(0, 300));
+        if (!cache.has(eventId)) {
+          const result = Array.isArray(msg.RESULT) ? msg.RESULT.filter(Boolean) : [];
+          console.log(`[pup:${eventId}] first data — ${result.length} entries`);
+          if (result[0]) console.log(`[pup:${eventId}] sample[0]:`, JSON.stringify(result[0]).slice(0, 400));
+        }
+        cache.set(eventId, { data: msg, ts: Date.now() });
+      } catch {
+        // ignore non-JSON frames (ping/pong, binary)
       }
-      cache.set(eventId, { data: msg, ts: Date.now() });
-    } catch (e) {
-      console.error(`[ws:${eventId}] parse error:`, e.message);
-    }
-  });
+    });
 
-  ws.on("close", (code, reason) => {
-    const msg = reason?.toString() || "";
-    console.log(`[ws:${eventId}] closed (${code}${msg ? " " + msg : ""}), reconnecting in ${RECONNECT_MS}ms`);
-    sockets.delete(eventId);
-    setTimeout(() => _connect(eventId), RECONNECT_MS);
-  });
+    browser.on("disconnected", () => {
+      console.log(`[pup:${eventId}] browser disconnected, reconnecting in 10s`);
+      sessions.delete(eventId);
+      setTimeout(() => _connect(eventId), 10000);
+    });
 
-  ws.on("error", (err) => {
-    console.error(`[ws:${eventId}] error:`, err.message);
-  });
+    sessions.set(eventId, browser);
+
+    await page.goto(`${BASE_URL}/event=${eventId}?config=w3`, {
+      waitUntil: "load",
+      timeout: 30000,
+    });
+
+    console.log(`[pup:${eventId}] page loaded — intercepting WebSocket`);
+
+  } catch (e) {
+    console.error(`[pup:${eventId}] error:`, e.message);
+    sessions.delete(eventId);
+    setTimeout(() => _connect(eventId), 10000);
+  }
 }
