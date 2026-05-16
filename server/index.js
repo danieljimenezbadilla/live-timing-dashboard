@@ -14,6 +14,17 @@ app.use(express.json());
 
 app.get("/health", (_req, res) => res.json({ ok: true, uptime: process.uptime() }));
 
+// Debug: shows raw WebSocket data (remove after fixing normalizer)
+app.get("/api/debug/:id", (req, res) => {
+  const cached = getCached(req.params.id);
+  if (!cached) return res.status(404).json({ error: "no data yet" });
+  const { RESULT, ...rest } = cached.data;
+  const sample = Array.isArray(RESULT)
+    ? RESULT.filter(Boolean).slice(0, 2)
+    : RESULT;
+  res.json({ meta: rest, RESULT_sample: sample, RESULT_length: Array.isArray(RESULT) ? RESULT.length : typeof RESULT });
+});
+
 app.get("/api/event/:id", (req, res) => {
   const eventId = req.params.id;
 
