@@ -1,189 +1,138 @@
-// Converts whatever the upstream returns into a stable schema that the
-// frontend can rely on:
+// Converts a WebSocket message from livetiming.azurewebsites.net into the
+// stable schema the frontend expects:
 //
-// {
-//   event: {
-//     name, status, flag, timeRemaining, trackName, totalLaps
-//   },
-//   leader: {
-//     position, carNumber, driver, laps, bestLap, vehicle, class
-//   },
-//   cars: [
-//     {
-//       position, carNumber, status, class, classRank, driver,
-//       laps, gap, lastLap, bestLap, pitStops, vehicle, team
-//     }
-//   ],
-//   meta: { source, fetchedAt }
-// }
+// { event, leader, cars[], meta }
+//
+// The upstream RESULT field is a sparse 1-indexed array. Each entry is either
+// an array of positional values or an object — we handle both. Unknown fields
+// are mapped to "—" so the UI never breaks regardless of schema changes.
 
-import * as cheerio from "cheerio";
-
+const str = (v) => (v == null ? "" : String(v).trim());
 const num = (v) => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = Number(String(v).replace(/[^0-9.\-]/g, ""));
+  const n = Number(str(v).replace(/[^0-9.\-]/g, ""));
   return Number.isFinite(n) ? n : null;
 };
 
-const str = (v) => (v === null || v === undefined ? "" : String(v).trim());
+// ----- Object-shaped RESULT entry ----------------------------------------
+const OBJ_KEYS = {
+  position:   ["POS", "Pos", "pos", "POSITION", "rank"],
+  carNumber:  ["SNR", "BIB", "NUMBER", "No", "no", "CAR"],
+  status:     ["STATUS", "State", "state"],
+  class:      ["CLASS", "Class", "CATEGORY"],
+  classRank:  ["CLASSPOS", "ClassPos", "classRank", "POSINCLASS"],
+  driver:     ["DRIVER", "Driver", "NAME", "Pilot"],
+  laps:       ["LAPS", "Laps", "LAP"],
+  gap:        ["GAP", "Gap", "BEHIND", "DIFF"],
+  lastLap:    ["LASTLAP", "LastLap", "LAST"],
+  bestLap:    ["BESTLAP", "BestLap", "BEST", "FASTEST"],
+  pitStops:   ["PITSTOPS", "Pits", "PITS", "STOPS"],
+  vehicle:    ["VEHICLE", "Vehicle", "CAR_MODEL", "MODEL"],
+  team:       ["TEAM", "Team"],
+};
 
-// Try every plausible key name (the upstream schema isn't documented).
-function pick(obj, ...keys) {
+function pick(obj, keys) {
   for (const k of keys) {
-    if (obj && obj[k] !== undefined && obj[k] !== null && obj[k] !== "") {
-      return obj[k];
-    }
+    if (obj[k] != null && obj[k] !== "") return obj[k];
   }
   return null;
 }
 
-function normalizeCarFromJson(c, idx) {
+function carFromObject(entry, idx) {
   return {
-    position: num(pick(c, "position", "pos", "Pos", "Position", "rank", "Rank")) ?? idx + 1,
-    carNumber: str(pick(c, "carNumber", "number", "no", "No", "carNo", "CarNumber", "racingNumber")),
-    status: str(pick(c, "status", "state", "Status", "carStatus")) || "RUN",
-    class: str(pick(c, "class", "Class", "category", "Category", "cls")),
-    classRank: num(pick(c, "classRank", "classPosition", "classPos", "ClassRank", "rankInClass")),
-    driver: str(
-      pick(c, "driver", "driverName", "Driver", "name", "Name", "currentDriver", "pilot", "Piloto")
-    ),
-    laps: num(pick(c, "laps", "Laps", "lap", "lapCount", "completedLaps")) ?? 0,
-    gap: str(pick(c, "gap", "Gap", "gapToLeader", "behind", "Behind", "diff")),
-    lastLap: str(pick(c, "lastLap", "LastLap", "lastLapTime", "last", "Last")),
-    bestLap: str(pick(c, "bestLap", "BestLap", "bestLapTime", "best", "Best", "fastest")),
-    pitStops: num(pick(c, "pitStops", "pits", "Pits", "pitCount", "PitStops", "stops")) ?? 0,
-    vehicle: str(pick(c, "vehicle", "Vehicle", "car", "Car", "carModel", "model")),
-    team: str(pick(c, "team", "Team", "teamName")),
+    position:  num(pick(entry, OBJ_KEYS.position))  ?? idx + 1,
+    carNumber: str(pick(entry, OBJ_KEYS.carNumber)),
+    status:    str(pick(entry, OBJ_KEYS.status))    || "RUN",
+    class:     str(pick(entry, OBJ_KEYS.class)),
+    classRank: num(pick(entry, OBJ_KEYS.classRank)),
+    driver:    str(pick(entry, OBJ_KEYS.driver)),
+    laps:      num(pick(entry, OBJ_KEYS.laps))      ?? 0,
+    gap:       str(pick(entry, OBJ_KEYS.gap)),
+    lastLap:   str(pick(entry, OBJ_KEYS.lastLap)),
+    bestLap:   str(pick(entry, OBJ_KEYS.bestLap)),
+    pitStops:  num(pick(entry, OBJ_KEYS.pitStops))  ?? 0,
+    vehicle:   str(pick(entry, OBJ_KEYS.vehicle)),
+    team:      str(pick(entry, OBJ_KEYS.team)),
   };
 }
 
-function normalizeFromJson(payload, sourceUrl) {
-  // The payload could be: array of cars, or { results: [...] }, or { entries: [...] }, etc.
-  const list =
-    Array.isArray(payload)
-      ? payload
-      : payload.results || payload.entries || payload.cars || payload.standings ||
-        payload.data?.results || payload.data?.entries || [];
+// ----- Array-shaped RESULT entry -----------------------------------------
+// Common column orders seen in similar timing systems. We try each mapping
+// until we get at least a car number or driver name.
+const ARRAY_MAPPINGS = [
+  // [pos, carNo, class, classRank, driver, laps, gap, lastLap, bestLap, pits, vehicle, team, status]
+  { position:0, carNumber:1, class:2, classRank:3, driver:4, laps:5, gap:6, lastLap:7, bestLap:8, pitStops:9, vehicle:10, team:11, status:12 },
+  // [pos, carNo, driver, class, laps, gap, lastLap, bestLap, pits, status]
+  { position:0, carNumber:1, driver:2, class:3, laps:4, gap:5, lastLap:6, bestLap:7, pitStops:8, status:9 },
+  // [carNo, pos, driver, class, laps, gap, lastLap, bestLap, pits, status]
+  { carNumber:0, position:1, driver:2, class:3, laps:4, gap:5, lastLap:6, bestLap:7, pitStops:8, status:9 },
+];
 
-  const cars = list.map(normalizeCarFromJson).sort((a, b) => a.position - b.position);
+function carFromArray(arr, positionFallback) {
+  for (const map of ARRAY_MAPPINGS) {
+    const get = (k) => (map[k] != null ? arr[map[k]] : undefined);
+    const carNo = str(get("carNumber"));
+    const driver = str(get("driver"));
+    if (!carNo && !driver) continue;
+    return {
+      position:  num(get("position"))  ?? positionFallback,
+      carNumber: carNo,
+      status:    str(get("status"))    || "RUN",
+      class:     str(get("class")),
+      classRank: num(get("classRank")),
+      driver:    driver,
+      laps:      num(get("laps"))      ?? 0,
+      gap:       str(get("gap")),
+      lastLap:   str(get("lastLap")),
+      bestLap:   str(get("bestLap")),
+      pitStops:  num(get("pitStops"))  ?? 0,
+      vehicle:   str(get("vehicle")),
+      team:      str(get("team")),
+    };
+  }
+  // Unknown format — log raw and return a placeholder so the UI doesn't crash
+  console.warn("[normalizer] unknown array format:", JSON.stringify(arr).slice(0, 200));
+  return null;
+}
 
-  const eventInfo = payload.event || payload.race || payload.meta || {};
+// ----- Main export --------------------------------------------------------
+export function normalize(msg) {
+  const resultRaw = msg.RESULT ?? [];
+  // RESULT is 1-indexed sparse array → filter out nulls/undefineds
+  const entries = Array.isArray(resultRaw)
+    ? resultRaw.map((e, i) => ({ e, i })).filter(({ e }) => e != null)
+    : [];
+
+  const cars = entries
+    .map(({ e, i }) =>
+      typeof e === "object" && !Array.isArray(e)
+        ? carFromObject(e, i)
+        : Array.isArray(e)
+        ? carFromArray(e, i)
+        : null
+    )
+    .filter(Boolean)
+    .sort((a, b) => a.position - b.position);
+
+  const trackState = str(msg.TRACKSTATE);
+  const flagMap = { "0": "GREEN", "1": "YELLOW", "2": "RED", "3": "SC", "4": "VSC" };
+
   const event = {
-    name: str(pick(eventInfo, "name", "title", "eventName")) || "Live Timing",
-    status: str(pick(eventInfo, "status", "state", "flag")),
-    flag: str(pick(eventInfo, "flag", "trackStatus")),
-    timeRemaining: str(pick(eventInfo, "timeRemaining", "remaining", "timeLeft")),
-    trackName: str(pick(eventInfo, "track", "trackName", "circuit")),
-    totalLaps: num(pick(eventInfo, "totalLaps", "scheduledLaps")) ?? null,
+    name:          str(msg.CUP)       || "Live Timing",
+    status:        str(msg.HEAT)      || "",
+    flag:          flagMap[trackState] || trackState,
+    timeRemaining: str(msg.REMAINING) || str(msg.TIMELEFT) || "",
+    trackName:     str(msg.TRACKNAME) || "",
+    totalLaps:     num(msg.TOTALLAPS) ?? null,
   };
-
-  const leader = cars[0] || null;
 
   return {
     event,
-    leader,
+    leader: cars[0] ?? null,
     cars,
     meta: {
-      source: sourceUrl,
+      source: "wss://livetiming.azurewebsites.net/",
       fetchedAt: new Date().toISOString(),
-      shape: "json",
+      shape: "websocket",
     },
   };
-}
-
-// HTML parser — works against the rendered results page table.
-// Maps cell positions tolerantly using header text when available.
-function normalizeFromHtml(html, sourceUrl) {
-  const $ = cheerio.load(html);
-
-  // Find the most likely results table: the one with the most <tr>.
-  let bestTable = null;
-  let bestRows = 0;
-  $("table").each((_, t) => {
-    const rows = $(t).find("tr").length;
-    if (rows > bestRows) {
-      bestRows = rows;
-      bestTable = t;
-    }
-  });
-
-  let cars = [];
-  if (bestTable) {
-    const $rows = $(bestTable).find("tr");
-    const headers = [];
-    $rows
-      .first()
-      .find("th,td")
-      .each((_, th) => headers.push($(th).text().trim().toLowerCase()));
-
-    const indexOfHeader = (...labels) => {
-      for (const l of labels) {
-        const idx = headers.findIndex((h) => h.includes(l));
-        if (idx >= 0) return idx;
-      }
-      return -1;
-    };
-
-    const idx = {
-      pos: indexOfHeader("pos", "rank", "p"),
-      no: indexOfHeader("no", "num", "#", "car"),
-      status: indexOfHeader("status", "state"),
-      cls: indexOfHeader("class", "cat"),
-      classRank: indexOfHeader("class rank", "in class", "cls rank"),
-      driver: indexOfHeader("driver", "name", "pilot"),
-      laps: indexOfHeader("laps", "lap"),
-      gap: indexOfHeader("gap", "behind", "diff"),
-      lastLap: indexOfHeader("last"),
-      bestLap: indexOfHeader("best", "fast"),
-      pits: indexOfHeader("pit", "stops"),
-      vehicle: indexOfHeader("vehicle", "car model", "model"),
-      team: indexOfHeader("team"),
-    };
-
-    $rows.slice(1).each((i, row) => {
-      const cells = $(row).find("td");
-      if (cells.length === 0) return;
-      const cell = (n) => (n >= 0 && cells[n] ? $(cells[n]).text().trim() : "");
-      cars.push({
-        position: num(cell(idx.pos)) ?? i + 1,
-        carNumber: cell(idx.no),
-        status: cell(idx.status) || "RUN",
-        class: cell(idx.cls),
-        classRank: num(cell(idx.classRank)),
-        driver: cell(idx.driver),
-        laps: num(cell(idx.laps)) ?? 0,
-        gap: cell(idx.gap),
-        lastLap: cell(idx.lastLap),
-        bestLap: cell(idx.bestLap),
-        pitStops: num(cell(idx.pits)) ?? 0,
-        vehicle: cell(idx.vehicle),
-        team: cell(idx.team),
-      });
-    });
-  }
-
-  cars.sort((a, b) => a.position - b.position);
-
-  return {
-    event: {
-      name: $("title").text().replace(/- Live Timing.*/i, "").trim() || "Live Timing",
-      status: "",
-      flag: "",
-      timeRemaining: "",
-      trackName: "",
-      totalLaps: null,
-    },
-    leader: cars[0] || null,
-    cars,
-    meta: {
-      source: sourceUrl,
-      fetchedAt: new Date().toISOString(),
-      shape: "html",
-    },
-  };
-}
-
-export function normalize({ kind, payload, sourceUrl }) {
-  if (kind === "json") return normalizeFromJson(payload, sourceUrl);
-  return normalizeFromHtml(payload, sourceUrl);
 }
