@@ -1,17 +1,18 @@
-// Maintains persistent WebSocket connections to livetiming.azurewebsites.net
-// and caches the latest message per event ID.
+// Connects to wss://livetiming.azurewebsites.net/ and caches live data.
 //
-// The upstream pushes full state on connect and incremental updates thereafter.
-// Our HTTP API (/api/event/:id) simply returns the latest cached snapshot.
+// The upstream requires Azure session cookies (TiPMix / x-ms-routing-name)
+// that are set by the initial HTTP page load. We fetch the page first to
+// obtain those cookies, then open the WebSocket with them.
 
 import { WebSocket } from "ws";
 
+const BASE = "https://livetiming.azurewebsites.net";
 const WS_URL = "wss://livetiming.azurewebsites.net/";
-const RECONNECT_MS = 3000;
+const RECONNECT_MS = 5000;
 
 // eventId -> { data: Object, ts: number }
 const cache = new Map();
-// eventId -> WebSocket
+// eventId -> WebSocket | "connecting"
 const sockets = new Map();
 
 export function ensureConnected(eventId) {
@@ -22,11 +23,38 @@ export function getCached(eventId) {
   return cache.get(eventId) ?? null;
 }
 
-function _connect(eventId) {
+async function fetchCookies(eventId) {
+  try {
+    const res = await fetch(`${BASE}/event=${eventId}?config=w3`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,*/*",
+      },
+      redirect: "follow",
+    });
+    const raw = res.headers.get("set-cookie") ?? "";
+    // Extract individual cookie name=value pairs
+    const cookies = [...raw.matchAll(/([^,;\s]+=[^,;]+)/g)]
+      .map((m) => m[1].trim())
+      .filter((c) => !/(path|domain|expires|samesite|secure|httponly)/i.test(c));
+    console.log(`[ws:${eventId}] cookies obtained:`, cookies.join("; ").slice(0, 120));
+    return cookies.join("; ");
+  } catch (e) {
+    console.warn(`[ws:${eventId}] cookie fetch failed:`, e.message);
+    return "";
+  }
+}
+
+async function _connect(eventId) {
+  sockets.set(eventId, "connecting");
+
+  const cookie = await fetchCookies(eventId);
+
   const ws = new WebSocket(WS_URL, {
     headers: {
-      "Origin": "https://livetiming.azurewebsites.net",
-      "User-Agent": "Mozilla/5.0 (LiveTimingProxy)",
+      "Origin": BASE,
+      "Cookie": cookie,
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
     },
   });
 
@@ -39,12 +67,9 @@ function _connect(eventId) {
   ws.on("message", (raw) => {
     try {
       const msg = JSON.parse(raw.toString());
-      // Log RESULT structure once so we can see the format in Render logs
-      if (!cache.has(eventId) && msg.RESULT !== undefined) {
-        const sample = Array.isArray(msg.RESULT)
-          ? msg.RESULT.find((x) => x != null)
-          : msg.RESULT;
-        console.log(`[ws:${eventId}] RESULT sample:`, JSON.stringify(sample).slice(0, 400));
+      if (!cache.has(eventId)) {
+        const result = Array.isArray(msg.RESULT) ? msg.RESULT.filter(Boolean) : [];
+        console.log(`[ws:${eventId}] first message — RESULT entries: ${result.length}, sample:`, JSON.stringify(result[0]).slice(0, 300));
       }
       cache.set(eventId, { data: msg, ts: Date.now() });
     } catch (e) {
@@ -60,6 +85,5 @@ function _connect(eventId) {
 
   ws.on("error", (err) => {
     console.error(`[ws:${eventId}] error:`, err.message);
-    // 'close' fires after 'error', so reconnect is handled there
   });
 }
