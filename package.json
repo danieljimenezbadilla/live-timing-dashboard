@@ -1,0 +1,12 @@
+{
+  "name": "live-timing-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "npm ci --prefix server && npm ci --prefix client && npm run build --prefix client",
+    "start": "node server/index.js"
+  }
+}
