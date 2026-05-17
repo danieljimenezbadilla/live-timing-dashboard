@@ -8,9 +8,10 @@ const PIT_BADGE_MS = 45000; // show "PIT IN" badge for 45s after entry
 //   I1/I2/I3/I4 = sector intermediate (probable)
 //   F   = finish line (probable)
 const STATUS_LABEL = {
-  PI: "PIT",
-  AP: "ON TRACK",
-  F:  "FINISH",
+  PI:  "PIT",
+  AP:  "EN PISTA",
+  RUN: "EN PISTA",
+  F:   "LLEGADA",
 };
 
 const normalizeStatus = (s) => {
