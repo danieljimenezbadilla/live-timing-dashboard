@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function Filters({ query, setQuery, classFilter, setClassFilter, classes }) {
+export default function Filters({ query, setQuery }) {
   return (
     <section className="filters">
       <div className="filters__search">
@@ -20,24 +20,6 @@ export default function Filters({ query, setQuery, classFilter, setClassFilter, 
             ×
           </button>
         )}
-      </div>
-
-      <div className="filters__classes" role="tablist" aria-label="Filtrar por clase">
-        <button
-          className={`chip ${classFilter === "ALL" ? "chip--active" : ""}`}
-          onClick={() => setClassFilter("ALL")}
-        >
-          Todas
-        </button>
-        {classes.map((c) => (
-          <button
-            key={c}
-            className={`chip ${classFilter === c ? "chip--active" : ""}`}
-            onClick={() => setClassFilter(c)}
-          >
-            {c}
-          </button>
-        ))}
       </div>
     </section>
   );

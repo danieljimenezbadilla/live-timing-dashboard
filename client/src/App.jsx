@@ -20,15 +20,8 @@ export default function App() {
   const { data, loading, error, lastUpdated, refresh } = useLiveTiming(eventId, 5000);
 
   const [query, setQuery] = useState("");
-  const [classFilter, setClassFilter] = useState("ALL");
 
   const cars = data?.cars || [];
-
-  const classes = useMemo(() => {
-    const set = new Set();
-    for (const c of cars) if (c.class) set.add(c.class);
-    return [...set].sort();
-  }, [cars]);
 
   const bestOverallCarNo = useMemo(() => {
     let best = null;
@@ -41,18 +34,15 @@ export default function App() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return cars.filter((c) => {
-      if (classFilter !== "ALL" && c.class !== classFilter) return false;
-      if (!q) return true;
-      return (
-        (c.carNumber || "").toLowerCase().includes(q) ||
-        (c.driver || "").toLowerCase().includes(q) ||
-        (c.class || "").toLowerCase().includes(q) ||
-        (c.vehicle || "").toLowerCase().includes(q) ||
-        (c.team || "").toLowerCase().includes(q)
-      );
-    });
-  }, [cars, query, classFilter]);
+    if (!q) return cars;
+    return cars.filter((c) =>
+      (c.carNumber || "").toLowerCase().includes(q) ||
+      (c.driver || "").toLowerCase().includes(q) ||
+      (c.class || "").toLowerCase().includes(q) ||
+      (c.vehicle || "").toLowerCase().includes(q) ||
+      (c.team || "").toLowerCase().includes(q)
+    );
+  }, [cars, query]);
 
   const stale = data?.meta?.stale;
 
@@ -88,13 +78,7 @@ export default function App() {
       {data && (
         <>
           <StatsCards data={data} />
-          <Filters
-            query={query}
-            setQuery={setQuery}
-            classFilter={classFilter}
-            setClassFilter={setClassFilter}
-            classes={classes}
-          />
+          <Filters query={query} setQuery={setQuery} />
           <LeaderboardTable cars={filtered} bestOverallCarNo={bestOverallCarNo} />
           <footer className="footer">
             Fuente: <code>{data.meta?.source}</code> · Formato: <code>{data.meta?.shape}</code>
