@@ -19,9 +19,12 @@ async function _connect(eventId) {
   console.log(`[pup:${eventId}] launching browser…`);
 
   try {
+    const execPath = await chromium.executablePath();
+    console.log(`[pup:${eventId}] executablePath: ${execPath}`);
+
     const browser = await puppeteer.launch({
       args: chromium.args,
-      executablePath: await chromium.executablePath(),
+      executablePath: execPath,
       headless: chromium.headless,
       defaultViewport: chromium.defaultViewport,
     });
