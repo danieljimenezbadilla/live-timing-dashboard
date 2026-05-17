@@ -419,10 +419,60 @@ body {
 .leaderboard tbody tr:last-child td { border-bottom: none; }
 .leaderboard tbody tr:hover td { background: rgba(253,151,31,0.04); }
 
+/* ─── Gap trend indicator ─────────────────────────────────────────── */
+.gap-cell {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.gap-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.gap-trend--closing { color: var(--green); }
+.gap-trend--growing { color: var(--red); }
+.gap-delta {
+  font-size: 9px;
+  font-family: var(--mono);
+  opacity: 0.85;
+}
+
+/* ─── Pit entry badge ─────────────────────────────────────────────── */
+.status-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.pit-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(230,219,116,0.18);
+  color: var(--yellow);
+  border: 1px solid rgba(230,219,116,0.4);
+  text-transform: uppercase;
+  animation: pitPulse 1.6s ease-in-out infinite;
+}
+.pit-badge--mobile { margin-left: 6px; vertical-align: middle; }
+
+@keyframes pitPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
+}
+
 /* ─── Cell sizing ─────────────────────────────────────────────────── */
 .cell-pos    { width: 52px; text-align: center; }
 .cell-no     { width: 64px; }
-.cell-status { width: 90px; }
+.cell-status { width: 110px; }
 .cell-class  { width: 80px; }
 .cell-rank   { width: 52px; color: var(--text-muted); font-family: var(--mono); font-size: 13px; }
 .cell-laps   { width: 56px; text-align: right; color: var(--text-dim); }

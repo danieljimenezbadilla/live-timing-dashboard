@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 
+const PIT_BADGE_MS = 45000; // show "PIT IN" badge for 45s after entry
+
 const flagClass = (status) => {
   if (!status) return "";
   const s = status.toUpperCase();
@@ -9,6 +11,8 @@ const flagClass = (status) => {
   if (/CHK|FIN/.test(s)) return "row--fin";
   return "";
 };
+
+const isPitStatus = (s) => /pit/i.test(s || "");
 
 function formatGap(gap, isLeader) {
   if (isLeader) return "—";
@@ -35,6 +39,17 @@ function formatGap(gap, isLeader) {
   return s;
 }
 
+function parseGapToSec(gap) {
+  if (!gap) return null;
+  const s = String(gap).trim();
+  if (/lap/i.test(s)) return null;
+  const colon = s.match(/^\+?(\d+):(\d+(?:\.\d+)?)/);
+  if (colon) return (+colon[1]) * 60 + +colon[2];
+  const flat = s.match(/^\+?(\d+(?:\.\d+)?)/);
+  if (flat) return +flat[1];
+  return null;
+}
+
 function podiumClass(pos) {
   if (pos === 1) return "pos-num--p1";
   if (pos === 2) return "pos-num--p2";
@@ -42,12 +57,29 @@ function podiumClass(pos) {
   return "";
 }
 
-function DriverRow({ car, isLeader, isBestOverall, prevLastLap, expanded, onToggle }) {
+function GapTrend({ gap, prevGap, isLeader }) {
+  if (isLeader || !gap) return null;
+  const curr = parseGapToSec(gap);
+  const prev = parseGapToSec(prevGap);
+  if (curr === null || prev === null) return null;
+  const delta = curr - prev;
+  if (Math.abs(delta) < 0.05) return null; // ignore noise < 50ms
+  const closing = delta < 0;
+  return (
+    <span className={`gap-trend gap-trend--${closing ? "closing" : "growing"}`}>
+      {closing ? "▼" : "▲"}
+      <span className="gap-delta">{Math.abs(delta).toFixed(2)}s</span>
+    </span>
+  );
+}
+
+function DriverRow({ car, isLeader, isBestOverall, prevLastLap, prevGap, pitEntryTs, expanded, onToggle }) {
   const justImproved = car.lastLap && prevLastLap && car.lastLap !== prevLastLap;
   const rowStatus = flagClass(car.status);
   const statusLabel = rowStatus.replace("row--", "") || "run";
   const colSpan = 7;
   const rowPodium = car.position === 2 ? "row--p2" : car.position === 3 ? "row--p3" : "";
+  const showPitBadge = pitEntryTs && (Date.now() - pitEntryTs) < PIT_BADGE_MS;
 
   return (
     <>
@@ -62,16 +94,22 @@ function DriverRow({ car, isLeader, isBestOverall, prevLastLap, expanded, onTogg
           <span className="car-no">#{car.carNumber || "—"}</span>
         </td>
         <td className="cell-status col-hide-mobile">
-          <span className={`status-pill status-pill--${statusLabel}`}>
-            {car.status || "RUN"}
-          </span>
+          <div className="status-cell">
+            <span className={`status-pill status-pill--${statusLabel}`}>
+              {car.status || "RUN"}
+            </span>
+            {showPitBadge && <span className="pit-badge">PIT IN</span>}
+          </div>
         </td>
         <td className="cell-class col-hide-mobile">
           {car.class && <span className="class-tag">{car.class}</span>}
         </td>
         <td className="cell-rank col-hide-mobile">{car.classRank ?? "—"}</td>
         <td className="cell-driver">
-          <div className="driver-main">{car.driver || "—"}</div>
+          <div className="driver-main">
+            {car.driver || "—"}
+            {showPitBadge && <span className="pit-badge pit-badge--mobile col-hide-desktop">PIT IN</span>}
+          </div>
           {car.team && <div className="driver-team">{car.team}</div>}
           {car.class && (
             <div className="driver-class-mobile">
@@ -82,7 +120,10 @@ function DriverRow({ car, isLeader, isBestOverall, prevLastLap, expanded, onTogg
         </td>
         <td className="cell-laps mono col-hide-sm">{car.laps ?? 0}</td>
         <td className={`cell-gap mono ${isLeader ? "cell-gap--leader" : ""}`}>
-          {formatGap(car.gap, isLeader)}
+          <div className="gap-cell">
+            <span>{formatGap(car.gap, isLeader)}</span>
+            <GapTrend gap={car.gap} prevGap={prevGap} isLeader={isLeader} />
+          </div>
         </td>
         <td className="cell-time mono col-hide-mobile">{car.lastLap || "—"}</td>
         <td className={`cell-time mono ${isBestOverall ? "cell-time--purple" : ""}`}>
@@ -135,12 +176,41 @@ function DriverRow({ car, isLeader, isBestOverall, prevLastLap, expanded, onTogg
 
 export default function LeaderboardTable({ cars, bestOverallCarNo }) {
   const prevLastLapMap = useRef(new Map());
+  const prevGapMap     = useRef(new Map());
+  const prevStatusMap  = useRef(new Map());
+  const pitEntryMap    = useRef(new Map()); // carNumber → timestamp of pit entry
   const [expandedCar, setExpandedCar] = useState(null);
 
+  // Capture prev values BEFORE updating (read first, then write)
+  const prevGaps     = prevGapMap.current;
+  const prevStatuses = prevStatusMap.current;
+
   useEffect(() => {
-    const next = new Map();
-    for (const c of cars) next.set(c.carNumber, c.lastLap);
-    prevLastLapMap.current = next;
+    const nextLap    = new Map();
+    const nextGap    = new Map();
+    const nextStatus = new Map();
+
+    for (const c of cars) {
+      nextLap.set(c.carNumber, c.lastLap);
+      nextGap.set(c.carNumber, c.gap);
+
+      // Detect pit entry: prev NOT pit, current IS pit
+      const wasPit = isPitStatus(prevStatusMap.current.get(c.carNumber));
+      const nowPit = isPitStatus(c.status);
+      if (nowPit && !wasPit) {
+        pitEntryMap.current.set(c.carNumber, Date.now());
+      }
+      // Clear badge once car leaves pit
+      if (!nowPit && wasPit) {
+        pitEntryMap.current.delete(c.carNumber);
+      }
+
+      nextStatus.set(c.carNumber, c.status);
+    }
+
+    prevLastLapMap.current = nextLap;
+    prevGapMap.current     = nextGap;
+    prevStatusMap.current  = nextStatus;
   });
 
   if (cars.length === 0) {
@@ -179,6 +249,8 @@ export default function LeaderboardTable({ cars, bestOverallCarNo }) {
               isLeader={c.position === 1}
               isBestOverall={bestOverallCarNo && c.carNumber === bestOverallCarNo}
               prevLastLap={prevLastLapMap.current.get(c.carNumber)}
+              prevGap={prevGaps.get(c.carNumber)}
+              pitEntryTs={pitEntryMap.current.get(c.carNumber)}
               expanded={expandedCar === c.carNumber}
               onToggle={() => setExpandedCar(prev => prev === c.carNumber ? null : c.carNumber)}
             />
