@@ -537,3 +537,61 @@ body {
   .cell-gap { width: 70px; }
   .cell-time { width: 65px; }
 }
+
+/* ─── Expand button (mobile only) ────────────────────────────────── */
+.col-show-mobile { display: none; }
+.col-show-mobile-row { display: none; }
+
+.cell-expand {
+  width: 28px;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+}
+.expand-icon {
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+/* ─── Expanded detail row ─────────────────────────────────────────── */
+.row-detail td {
+  padding: 0;
+  background: var(--bg-elev-2);
+  border-bottom: 1px solid var(--border-strong);
+}
+.row-detail__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  padding: 10px 12px;
+}
+.row-detail__item {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 8px 4px 0;
+}
+.row-detail__item--wide {
+  grid-column: span 2;
+}
+.row-detail__label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.row-detail__value {
+  font-size: 13px;
+  color: var(--text);
+}
+.row-detail__value.mono {
+  font-family: var(--mono);
+}
+
+/* ─── Show expand column only on mobile ──────────────────────────── */
+@media (max-width: 640px) {
+  .col-show-mobile { display: table-cell; }
+  .col-show-mobile-row { display: table-row; }
+  .row { cursor: pointer; }
+  .row--expanded { background: var(--bg-elev) !important; }
+}
