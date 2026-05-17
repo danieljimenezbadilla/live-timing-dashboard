@@ -14,9 +14,11 @@ export function useLiveTiming(eventId, intervalMs = 5000) {
     abortRef.current = ctrl;
     try {
       const json = await fetchEvent(eventId, ctrl.signal);
-      setData(json);
+      if (json !== null) {
+        setData(json);
+        setLastUpdated(new Date());
+      }
       setError(null);
-      setLastUpdated(new Date());
     } catch (e) {
       if (e.name !== "AbortError") setError(e.message || String(e));
     } finally {
