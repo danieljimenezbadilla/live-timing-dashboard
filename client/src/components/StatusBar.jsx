@@ -23,7 +23,7 @@ export default function StatusBar({ lastUpdated, loading, error, stale, onRefres
     <header className="statusbar">
       <div className="statusbar__brand">
         <span className="statusbar__logo">◆</span>
-        <span className="statusbar__title">LIVE TIMING</span>
+        <span className="statusbar__title">LIVE TIMING <span className="statusbar__by">by DJB</span></span>
         <span className="statusbar__divider" />
         <label className="statusbar__event">
           Evento

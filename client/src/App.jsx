@@ -98,6 +98,8 @@ export default function App() {
           <LeaderboardTable cars={filtered} bestOverallCarNo={bestOverallCarNo} />
           <footer className="footer">
             Fuente: <code>{data.meta?.source}</code> · Formato: <code>{data.meta?.shape}</code>
+            <br />
+            <span className="footer__credit">Página creada por DJB</span>
           </footer>
         </>
       )}

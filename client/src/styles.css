@@ -80,6 +80,13 @@ body {
   letter-spacing: 0.18em;
   font-size: 18px;
 }
+.statusbar__by {
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  font-size: 13px;
+  color: var(--text-dim);
+  vertical-align: middle;
+}
 .statusbar__divider {
   width: 1px;
   height: 22px;
@@ -424,11 +431,50 @@ body {
   color: var(--text-muted);
   letter-spacing: 0.05em;
   word-break: break-all;
+  text-align: center;
+}
+.footer__credit {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 .footer code {
   background: var(--bg-elev-2);
   padding: 2px 6px;
   border-radius: 4px;
+  color: var(--text-dim);
+}
+
+/* ─── Mobile-only driver info ─────────────────────────────────────── */
+.driver-class-mobile { display: none; }
+
+.status-pill-sm {
+  display: inline-block;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: #14321f;
+  color: #8be0a8;
+  border: 1px solid #1d4a2d;
+  text-transform: uppercase;
+  margin-right: 4px;
+}
+.status-pill-sm.status-pill--pit { background: #322714; color: #ffd58a; border-color: #4a3a18; }
+.status-pill-sm.status-pill--out { background: #321418; color: #ffb3bd; border-color: #4a1f28; }
+
+.class-tag-sm {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 9px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border-strong);
   color: var(--text-dim);
 }
 
@@ -438,12 +484,56 @@ body {
   .statusbar { padding: 12px; }
   .statusbar__title { font-size: 15px; letter-spacing: 0.14em; }
   .table-wrap { max-height: none; }
+  .stats-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
 }
 
 @media (max-width: 640px) {
-  .stat-card__value { font-size: 18px; }
+  /* Tabla: ocultar columnas secundarias */
+  .col-hide-mobile { display: none; }
+
+  /* Mostrar info de clase/estado dentro de la celda del piloto */
+  .driver-class-mobile {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 3px;
+  }
+
+  /* Tabla sin scroll horizontal */
+  .leaderboard { min-width: unset; width: 100%; }
+  .table-wrap { overflow-x: hidden; }
+
+  /* Celdas más compactas */
   .leaderboard tbody td,
-  .leaderboard thead th { padding: 9px 8px; font-size: 13px; }
-  .statusbar__right { gap: 8px; }
+  .leaderboard thead th { padding: 8px 6px; font-size: 12px; }
+
+  .cell-pos { width: 36px; }
+  .cell-no  { width: 44px; }
+  .cell-gap { width: 80px; }
+  .cell-time { width: 72px; }
+
+  .pos-num { min-width: 24px; height: 24px; font-size: 11px; }
+  .car-no  { font-size: 13px; }
+  .driver-main { font-size: 12px; }
+
+  /* Stats: 2 columnas en móvil */
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+  .stat-card { padding: 10px 12px; }
+  .stat-card__value { font-size: 16px; }
+  .stat-card__label { font-size: 10px; }
+
+  /* Statusbar */
   .statusbar__updated { display: none; }
+  .statusbar__right { gap: 8px; }
+  .statusbar__title { font-size: 14px; letter-spacing: 0.12em; }
+
+  /* Filtros */
+  .filters { gap: 8px; }
+  .filters__search { min-width: 0; }
+}
+
+@media (max-width: 400px) {
+  .col-hide-sm { display: none; }
+  .cell-gap { width: 70px; }
+  .cell-time { width: 65px; }
 }
