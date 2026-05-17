@@ -2,17 +2,38 @@ import React, { useEffect, useRef, useState } from "react";
 
 const PIT_BADGE_MS = 45000; // show "PIT IN" badge for 45s after entry
 
+// Confirmed from upstream data:
+//   PI  = in pits (confirmed via PIT column correlation)
+//   AP  = active/on track (probable)
+//   I1/I2/I3/I4 = sector intermediate (probable)
+//   F   = finish line (probable)
+const STATUS_LABEL = {
+  PI: "PIT",
+  AP: "ON TRACK",
+  F:  "FINISH",
+};
+
+const normalizeStatus = (s) => {
+  if (!s) return "—";
+  return STATUS_LABEL[s.toUpperCase()] ?? s;
+};
+
 const flagClass = (status) => {
   if (!status) return "";
   const s = status.toUpperCase();
-  if (/PIT/.test(s)) return "row--pit";
+  // PI = confirmed pit code; PIT* covers any PIT-prefixed variant
+  if (s === "PI" || s.startsWith("PIT")) return "row--pit";
   if (/DNF|OUT|RETIR/.test(s)) return "row--out";
   if (/DNS|DISQ|DSQ/.test(s)) return "row--dns";
-  if (/CHK|FIN/.test(s)) return "row--fin";
+  if (s === "F" || /CHK|FIN/.test(s)) return "row--fin";
   return "";
 };
 
-const isPitStatus = (s) => /pit/i.test(s || "");
+const isPitStatus = (s) => {
+  if (!s) return false;
+  const u = s.toUpperCase();
+  return u === "PI" || u.startsWith("PIT");
+};
 
 function formatGap(gap, isLeader) {
   if (isLeader) return "—";
@@ -96,7 +117,7 @@ function DriverRow({ car, isLeader, isBestOverall, prevLastLap, prevGap, pitEntr
         <td className="cell-status col-hide-mobile">
           <div className="status-cell">
             <span className={`status-pill status-pill--${statusLabel}`}>
-              {car.status || "RUN"}
+              {normalizeStatus(car.status)}
             </span>
             {showPitBadge && <span className="pit-badge">PIT IN</span>}
           </div>
@@ -113,7 +134,7 @@ function DriverRow({ car, isLeader, isBestOverall, prevLastLap, prevGap, pitEntr
           {car.team && <div className="driver-team">{car.team}</div>}
           {car.class && (
             <div className="driver-class-mobile">
-              <span className={`status-pill-sm status-pill--${statusLabel}`}>{car.status || "RUN"}</span>
+              <span className={`status-pill-sm status-pill--${statusLabel}`}>{normalizeStatus(car.status)}</span>
               <span className="class-tag-sm">{car.class}</span>
             </div>
           )}
