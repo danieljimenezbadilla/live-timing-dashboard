@@ -414,6 +414,7 @@ body {
   font-size: 14px;
   vertical-align: middle;
   font-variant-numeric: tabular-nums;
+  transition: background 0.18s ease;
 }
 .leaderboard tbody tr:last-child td { border-bottom: none; }
 .leaderboard tbody tr:hover td { background: rgba(253,151,31,0.04); }
@@ -523,11 +524,17 @@ body {
 .status-pill--fin { background: var(--leader-soft);     color: var(--leader);  border-color: rgba(102,217,239,0.3); }
 
 /* ─── Leader row ──────────────────────────────────────────────────── */
+.row--leader {
+  background: linear-gradient(90deg, rgba(102,217,239,0.10) 0%, transparent 75%);
+}
 .row--leader td {
-  background: linear-gradient(90deg, rgba(102,217,239,0.08) 0%, transparent 70%);
+  background: transparent;
 }
 .row--leader td:first-child {
   box-shadow: inset 4px 0 0 var(--leader);
+}
+.leaderboard tbody tr.row--leader:hover td {
+  background: rgba(102,217,239,0.05);
 }
 .row--leader .pos-num {
   background: var(--leader);
