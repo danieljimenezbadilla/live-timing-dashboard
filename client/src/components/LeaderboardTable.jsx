@@ -35,20 +35,28 @@ function formatGap(gap, isLeader) {
   return s;
 }
 
+function podiumClass(pos) {
+  if (pos === 1) return "pos-num--p1";
+  if (pos === 2) return "pos-num--p2";
+  if (pos === 3) return "pos-num--p3";
+  return "";
+}
+
 function DriverRow({ car, isLeader, isBestOverall, prevLastLap, expanded, onToggle }) {
   const justImproved = car.lastLap && prevLastLap && car.lastLap !== prevLastLap;
   const rowStatus = flagClass(car.status);
   const statusLabel = rowStatus.replace("row--", "") || "run";
-  const colSpan = 7; // number of visible columns on mobile (pos, no, driver, laps, gap, best, expand)
+  const colSpan = 7;
+  const rowPodium = car.position === 2 ? "row--p2" : car.position === 3 ? "row--p3" : "";
 
   return (
     <>
       <tr
-        className={`row ${isLeader ? "row--leader" : ""} ${rowStatus} ${justImproved ? "row--flash" : ""} ${expanded ? "row--expanded" : ""}`}
+        className={`row ${isLeader ? "row--leader" : ""} ${rowPodium} ${rowStatus} ${justImproved ? "row--flash" : ""} ${expanded ? "row--expanded" : ""}`}
         onClick={onToggle}
       >
         <td className="cell-pos">
-          <span className="pos-num">{car.position}</span>
+          <span className={`pos-num ${podiumClass(car.position)}`}>{car.position}</span>
         </td>
         <td className="cell-no">
           <span className="car-no">#{car.carNumber || "—"}</span>
