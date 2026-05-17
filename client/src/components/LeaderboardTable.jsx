@@ -98,7 +98,7 @@ function DriverRow({ car, isLeader, isBestOverall, prevLastLap, prevGap, pitEntr
   const justImproved = car.lastLap && prevLastLap && car.lastLap !== prevLastLap;
   const rowStatus = flagClass(car.status);
   const statusLabel = rowStatus.replace("row--", "") || "run";
-  const colSpan = 7;
+  const colSpan = 20;
   const rowPodium = car.position === 2 ? "row--p2" : car.position === 3 ? "row--p3" : "";
   const showPitBadge = pitEntryTs && (Date.now() - pitEntryTs) < PIT_BADGE_MS;
 

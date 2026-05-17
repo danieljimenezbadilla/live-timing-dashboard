@@ -653,6 +653,9 @@ body {
   font-family: var(--mono);
 }
 
+/* ─── Hide on desktop, show on mobile ────────────────────────────── */
+.col-hide-desktop { display: none; }
+
 /* ─── Mobile-only driver info ─────────────────────────────────────── */
 .driver-class-mobile { display: none; }
 
@@ -697,7 +700,9 @@ body {
 
 /* ─── Responsive 640px ────────────────────────────────────────────── */
 @media (max-width: 640px) {
-  .col-hide-mobile { display: none; }
+  .col-hide-mobile  { display: none; }
+  .col-hide-sm      { display: none; }
+  .col-hide-desktop { display: inline-block; }
 
   .driver-class-mobile {
     display: flex;
@@ -714,8 +719,13 @@ body {
 
   .cell-pos  { width: 34px; }
   .cell-no   { width: 42px; }
-  .cell-gap  { width: 78px; }
-  .cell-time { width: 72px; }
+  .cell-gap  { width: 86px; }
+  .cell-time { width: 76px; }
+
+  /* Gap text truncation so it never overflows its cell */
+  .gap-cell { overflow: hidden; max-width: 86px; }
+  .gap-cell > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+  .gap-delta { display: none; }
 
   .pos-num     { min-width: 24px; height: 24px; font-size: 10px; }
   .car-no      { font-size: 12px; }
@@ -725,23 +735,48 @@ body {
   .stat-card  { padding: 10px 12px; }
   .stat-card__value { font-size: 16px; }
   .stat-card__label { font-size: 9px; }
+  .stat-card__sub   { font-size: 10px; }
 
-  .statusbar__updated { display: none; }
-  .statusbar__right   { gap: 8px; }
-  .statusbar__title   { font-size: 15px; letter-spacing: 0.14em; }
+  /* StatusBar — explicit 2-row layout */
+  .statusbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 10px 14px 12px;
+  }
+  .statusbar__brand   { flex-wrap: nowrap; gap: 10px; }
+  .statusbar__divider { display: none; }
+  .statusbar__title   { font-size: 15px; letter-spacing: 0.12em; }
   .statusbar__by      { display: none; }
+  .statusbar__right   { gap: 8px; justify-content: space-between; }
+  .statusbar__updated { display: none; }
+  .statusbar__state   { font-size: 10px; letter-spacing: 0.12em; padding: 6px 10px; }
 
-  .filters { gap: 8px; }
-  .filters__search { min-width: 0; }
+  /* Expand tap target */
+  .cell-expand { width: 36px; padding: 0 6px !important; }
+  .expand-icon { font-size: 11px; opacity: 0.8; }
+
+  /* Filters — vertical stack, chips scroll horizontally */
+  .filters { flex-direction: column; align-items: stretch; gap: 8px; }
+  .filters__search { min-width: 0; width: 100%; }
+  .filters__classes {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    gap: 6px;
+  }
+  .filters__classes::-webkit-scrollbar { display: none; }
 
   .app > .table-wrap { margin: 0; border-radius: 0; border-left: none; border-right: none; }
 }
 
 /* ─── Responsive 400px ────────────────────────────────────────────── */
 @media (max-width: 400px) {
-  .col-hide-sm { display: none; }
-  .cell-gap  { width: 68px; }
-  .cell-time { width: 64px; }
+  .cell-gap  { width: 72px; }
+  .cell-time { width: 66px; }
+  .stats-grid { grid-template-columns: 1fr; }
+  .stat-card__value { font-size: 15px; }
 }
 
 /* ─── Expand button (mobile only) ────────────────────────────────── */
